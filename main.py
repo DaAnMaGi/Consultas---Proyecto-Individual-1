@@ -45,34 +45,50 @@ def developer(desarrollador:str):
     # Se eliminan las columnas que no se van a utilizar.
     r.drop(columns=["release_date","price"],inplace=True)
 
+    respuesta = []
+
+    # Se itera sobre las filas del DataFrame r para obtener las respuestas
+    for index, row in r.iterrows():
+        # Se construye un diccionario con los datos de cada fila
+        item = {
+            "año": row["Año"],
+            "cantidad de items": row["Cantidad de Items"],
+            "Contenido Free (%)": row["Contenido Free (%)"]
+        }
+        # Agregar el diccionario a la lista de respuestas
+        respuesta.append(item)
+
     # Se da el resultado.
-    return r
+    return respuesta
 
 @app.get("/userdata/{user}")
 def userdata(user:str):
+
     # Se obtienen los items para el jugador especificado.
     b = items[items["user_id"] == user]
 
     # Se obtiene el número de juegos para el usuario. 
-    n_juegos = b.loc[b.index[0],"items_count"]
+    n_juegos = int(b.loc[b.index[0],"items_count"])
 
-    # Se obtiene el precio de los juegos para el usuario
+    # Se obtienen los juegos del usuario
     lista_juegos = b["item_id"].tolist()
-    g = games[games["id"].isin(lista_juegos)][["price"]]
-    # Se transforman los datos "free" a 0
-    g.replace("Free",0,inplace=True)
+
+    # Se seleccionan los juegos que pertenecen al usuario y que no son "Free"
+    g = games[(games["id"].isin(lista_juegos)) & (games["price"] != "Free")]
+    # Se convierte la columna "price" a tipo numérico
+    g.loc[:,"price"] = pd.to_numeric(g["price"], errors="coerce")
     # Se suman los precios
-    money = g.sum().iloc[0]
+    money = g["price"].sum()
 
     # Se obtienen el % de juegos recomendados.
     n_recom = len(reviews[(reviews["user_id"] == user) & (reviews["recommend"] == True)])
-    recomendacion = round(n_recom/n_juegos,3)*100
+    recomendacion = float(round(n_recom/n_juegos,3)*100)
 
     #Se obtiene la respuesta
     respuesta = {"Usuario":user,
-             "Dinero gastado (USD)":money,
-             "% de recomendación":recomendacion,
-             "Cantidad de items":n_juegos}
+                "Dinero gastado (USD)":money,
+                "% de recomendación":recomendacion,
+                "Cantidad de items":n_juegos}
     
     return respuesta
 
@@ -118,41 +134,6 @@ def UserForGenre(genero:str):
 
     return response_data
 
-@app.get("/best_developer_year/{año}")
-def best_developer_year(año:int):
-    # Se obtienen los juegos y los desarrolladores de aquellos juegos que fueron lanzados en el año identificado.
-    g = games[games["release_date"].dt.year == año][["release_date","id","developer"]]
-    # Se asegura que el formato de la fecha de lanzamiento sea en año.
-    g["release_date"] = g["release_date"].dt.year
-
-    # se obtienen los juegos recomendados que salieron en el año indicado
-    r = reviews[(reviews["item_id"].isin(g["id"]) & (reviews["recommend"] == True))][["item_id","recommend"]]
-
-    # Se obtiene el número de recomendaciones por juego.
-    r = r.groupby("item_id").count()
-
-    # Se une el número de recomendaciones por juegos al dataframe con los desarrolladores para cada juego.
-    s = pd.merge(left=g,right=r,left_on="id",right_on="item_id")
-
-    # Se agrupan las recomendaciones por desarrolladora
-    s = s.groupby("developer")["recommend"].sum().sort_values(ascending=False)
-
-    # Se obtienen los 3 mejores desarrolladores
-    mejores = s.head(3)
-
-    # Se sacan los resultados
-    resultado = []
-    puesto = 1
-
-    # Se obtiene el puesto por desarrolladora y se agregan a la variable de resultado
-    for desarrolladora, recom in mejores.items():
-        resultado.append({"puesto":puesto,
-                        "developer":desarrolladora,
-                        })
-        puesto += 1
-    
-    return resultado
-
 @app.get("/developer_reviews_analysis/{desarrolladora}")
 def developer_reviews_analysis(desarrolladora:str):
     # Se obtienen todos los juegos de la desarrolladora.
@@ -172,4 +153,41 @@ def developer_reviews_analysis(desarrolladora:str):
         f"Negative = {negativas}",
         f"Positive = {positivas}"]}
 
+    return resultado
+
+@app.get("/best_developer_year/{año}")
+def best_developer_year(año:int):
+    # Se obtienen los juegos y los desarrolladores de aquellos juegos que fueron lanzados en el año identificado.
+    g = games[games["release_date"].dt.year == año][["release_date","id","developer"]]
+    # Se crea ima columna con el año de la fecha de lanzamiento.
+    g["year"] = g["release_date"].dt.year
+    # Se obtiene el id de los juegos
+    juegos = g["id"].to_list()
+
+    # se obtienen los juegos recomendados que salieron en el año indicado
+    r = reviews[(reviews["item_id"].isin(juegos) & (reviews["recommend"] == True))][["item_id","recommend"]]
+    # Se obtiene el número de recomendaciones por juego.
+    recomendaciones = r.groupby("item_id").count()
+
+    # Se une el número de recomendaciones por juegos al dataframe con los desarrolladores para cada juego.
+    s = recomendaciones.merge(g[["id","developer"]],left_on="item_id",right_on="id",how='left')
+    # Se agrupan las recomendaciones por desarrolladora
+    s = s.groupby("developer")["recommend"].sum()
+    # Se organizan de mayor a menor
+    s = s.sort_values(ascending=False)
+
+    # Se obtienen los 3 mejores desarrolladores
+    mejores = s.head(3)
+
+    # Se sacan los resultados
+    resultado = []
+    puesto = 1
+
+    # Se obtiene el puesto por desarrolladora y se agregan a la variable de resultado
+    for desarrolladora, recom in mejores.items():
+        resultado.append({"puesto":puesto,
+                        "developer":desarrolladora,
+                        })
+        puesto += 1
+    
     return resultado
