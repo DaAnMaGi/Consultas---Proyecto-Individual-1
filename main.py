@@ -8,12 +8,14 @@ app = FastAPI()
 # Ruta de los archivos
 ruta_games = "./data/r_games.json.gzip"
 ruta_reviews = "./data/r_reviews.json.gzip"
-ruta_items = "./data/r_items.json.gzip"
+# ruta_items = "./data/r_items.json.gzip"
+ruta_items_reducido = "../Data/items_reducido.json.gzip"
 
 # Se cargan las bibliotecas de datos
 games = pd.read_json(ruta_games,compression="gzip",convert_dates=["release_date"],date_unit="ms")
 reviews = pd.read_json(ruta_reviews,compression="gzip",convert_dates=["posted"],date_unit="ms")
-items = pd.read_json(ruta_items,compression="gzip")
+# items = pd.read_json(ruta_items,compression="gzip")
+items = pd.read_json(ruta_items_reducido,compression="gzip")
 
 # Se crean las consultas
 
@@ -159,12 +161,12 @@ def developer_reviews_analysis(desarrolladora:str):
 def best_developer_year(año:int):
     # Se obtienen los juegos y los desarrolladores de aquellos juegos que fueron lanzados en el año identificado.
     g = games[games["release_date"].dt.year == año][["release_date","id","developer"]]
-    # Se crea ima columna con el año de la fecha de lanzamiento.
+    # Se crea una columna con el año de la fecha de lanzamiento.
     g["year"] = g["release_date"].dt.year
     # Se obtiene el id de los juegos
     juegos = g["id"].to_list()
 
-    # se obtienen los juegos recomendados que salieron en el año indicado
+    # Se obtienen los juegos recomendados que salieron en el año indicado
     r = reviews[(reviews["item_id"].isin(juegos) & (reviews["recommend"] == True))][["item_id","recommend"]]
     # Se obtiene el número de recomendaciones por juego.
     recomendaciones = r.groupby("item_id").count()
